@@ -541,19 +541,24 @@ function handleDrop(e){
 function loadImagePreview(file){
   const reader=new FileReader();
   reader.onload=(ev)=>{
+    lastImageDataUrl=ev.target.result;
     const img=document.getElementById('preview-img');
+    img.onload=()=>{
+      uploadedImageEl=img;
+      document.getElementById('btn-analyze-upload').disabled=!isModelLoaded;
+    };
     img.src=ev.target.result;
-    img.onload=()=>{uploadedImageEl=img;lastImageDataUrl=ev.target.result;};
     document.getElementById('preview-container').classList.add('visible');
-    document.getElementById('btn-analyze-upload').disabled=!isModelLoaded;
   };
   reader.readAsDataURL(file);
 }
 
 async function analyzeUploadedImage(){
   if(!isModelLoaded){showModelError('Please load your model first.');return;}
-  if(!uploadedImageEl)return;
-  showAnalyzing();await runPrediction(uploadedImageEl);
+  const img=document.getElementById('preview-img');
+  if(!img||!img.src||img.naturalWidth===0){showModelError('Image not ready yet, please wait a moment and try again.');return;}
+  uploadedImageEl=img;
+  showAnalyzing();await runPrediction(img);
 }
 
 async function runPrediction(src){
