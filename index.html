@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EcoScan — Waste Classifier</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --green-50: #EAF3DE;
+    --green-100: #C0DD97;
+    --green-200: #97C459;
+    --green-400: #639922;
+    --green-600: #3B6D11;
+    --green-800: #27500A;
+    --green-900: #173404;
+    --teal-50: #E1F5EE;
+    --teal-100: #9FE1CB;
+    --teal-400: #1D9E75;
+    --teal-600: #0F6E56;
+    --amber-50: #FAEEDA;
+    --amber-400: #BA7517;
+    --gray-50: #F1EFE8;
+    --gray-100: #D3D1C7;
+    --gray-200: #B4B2A9;
+    --gray-400: #888780;
+    --gray-600: #5F5E5A;
+    --red-400: #E24B4A;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: #f7f9f3;
+    color: #1e2a12;
+    min-height: 100vh;
+  }
+
+  /* Leaf pattern background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      radial-gradient(circle at 15% 20%, rgba(99,153,34,0.07) 0%, transparent 40%),
+      radial-gradient(circle at 85% 70%, rgba(29,158,117,0.06) 0%, transparent 40%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  header {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.25rem 2rem;
+    border-bottom: 1px solid rgba(99,153,34,0.15);
+    background: rgba(247,249,243,0.92);
+    backdrop-filter: blur(6px);
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .logo-icon {
+    width: 36px; height: 36px;
+    background: var(--green-600);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .logo-icon svg { width: 20px; height: 20px; fill: white; }
+  .logo-text {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.4rem;
+    color: var(--green-800);
+  }
+  .logo-sub {
+    font-size: 0.72rem;
+    color: var(--gray-400);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 400;
+  }
+  .header-badge {
+    font-size: 0.75rem;
+    background: var(--green-50);
+    color: var(--green-600);
+    border: 1px solid rgba(99,153,34,0.25);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-weight: 500;
+  }
+
+  main {
+    position: relative;
+    z-index: 1;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+
+  .hero {
+    text-align: center;
+    margin-bottom: 2.5rem;
+  }
+  .hero h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 2.4rem;
+    color: var(--green-800);
+    line-height: 1.2;
+    margin-bottom: 0.6rem;
+  }
+  .hero p {
+    font-size: 1rem;
+    color: var(--gray-600);
+    font-weight: 300;
+    max-width: 480px;
+    margin: 0 auto;
+    line-height: 1.7;
+  }
+
+  /* Model URL input */
+  .model-setup {
+    background: white;
+    border: 1px solid rgba(99,153,34,0.2);
+    border-radius: 16px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .model-setup label {
+    font-size: 0.82rem;
+    color: var(--gray-600);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .model-setup input {
+    flex: 1;
+    min-width: 240px;
+    padding: 8px 12px;
+    border: 1px solid var(--gray-100);
+    border-radius: 8px;
+    font-size: 0.88rem;
+    font-family: 'DM Sans', sans-serif;
+    color: #1e2a12;
+    background: var(--gray-50);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .model-setup input:focus { border-color: var(--green-400); }
+  .btn-load {
+    padding: 8px 18px;
+    background: var(--green-600);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    white-space: nowrap;
+  }
+  .btn-load:hover { background: var(--green-800); }
+  .btn-load:active { transform: scale(0.97); }
+  .model-status {
+    font-size: 0.78rem;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-weight: 500;
+  }
+  .model-status.loading { background: var(--amber-50); color: var(--amber-400); }
+  .model-status.ready { background: var(--teal-50); color: var(--teal-600); }
+  .model-status.error { background: #FCEBEB; color: var(--red-400); }
+  .model-status.idle { background: var(--gray-50); color: var(--gray-400); }
+
+  /* Scanner area */
+  .scanner-card {
+    background: white;
+    border: 1px solid rgba(99,153,34,0.18);
+    border-radius: 20px;
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 4px 24px rgba(59,109,17,0.06);
+  }
+
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid rgba(99,153,34,0.12);
+    background: var(--green-50);
+  }
+  .tab {
+    flex: 1;
+    padding: 1rem;
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: var(--gray-400);
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    font-family: 'DM Sans', sans-serif;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+  }
+  .tab.active {
+    color: var(--green-600);
+    border-bottom-color: var(--green-600);
+    background: white;
+  }
+  .tab:hover:not(.active) { color: var(--green-400); }
+  .tab svg { width: 16px; height: 16px; }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* Camera panel */
+  .camera-panel {
+    padding: 1.5rem;
+  }
+  #camera-view-container {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4/3;
+    background: #0d1a07;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 1rem;
+  }
+  #camera-video {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: none;
+  }
+  #camera-canvas { display: none; }
+  .camera-placeholder {
+    width: 100%; height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: var(--gray-400);
+  }
+  .camera-placeholder svg { width: 48px; height: 48px; opacity: 0.4; }
+  .camera-placeholder p { font-size: 0.9rem; }
+  .scan-overlay {
+    position: absolute;
+    inset: 0;
+    display: none;
+    pointer-events: none;
+  }
+  .scan-overlay.active { display: block; }
+  .scan-line {
+    position: absolute;
+    left: 10%; right: 10%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--green-200), var(--green-400), var(--green-200), transparent);
+    animation: scanDown 2s ease-in-out infinite;
+  }
+  .scan-corner {
+    position: absolute;
+    width: 32px; height: 32px;
+    border-color: var(--green-400);
+    border-style: solid;
+    border-width: 0;
+  }
+  .scan-corner.tl { top: 12px; left: 12px; border-top-width: 3px; border-left-width: 3px; }
+  .scan-corner.tr { top: 12px; right: 12px; border-top-width: 3px; border-right-width: 3px; }
+  .scan-corner.bl { bottom: 12px; left: 12px; border-bottom-width: 3px; border-left-width: 3px; }
+  .scan-corner.br { bottom: 12px; right: 12px; border-bottom-width: 3px; border-right-width: 3px; }
+  @keyframes scanDown {
+    0% { top: 15%; opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { top: 85%; opacity: 0; }
+  }
+
+  .camera-controls {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .btn-primary {
+    padding: 10px 22px;
+    background: var(--green-600);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .btn-primary:hover { background: var(--green-800); }
+  .btn-primary:active { transform: scale(0.97); }
+  .btn-primary:disabled { background: var(--gray-200); cursor: not-allowed; }
+  .btn-secondary {
+    padding: 10px 22px;
+    background: transparent;
+    color: var(--green-600);
+    border: 1px solid rgba(99,153,34,0.4);
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-secondary:hover { background: var(--green-50); }
+
+  /* Upload panel */
+  .upload-panel { padding: 1.5rem; }
+  .dropzone {
+    border: 2px dashed rgba(99,153,34,0.3);
+    border-radius: 14px;
+    padding: 3rem 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--green-50);
+  }
+  .dropzone:hover, .dropzone.dragover {
+    border-color: var(--green-400);
+    background: #e3f0ce;
+  }
+  .dropzone svg { width: 40px; height: 40px; color: var(--green-400); margin-bottom: 12px; }
+  .dropzone h3 { font-size: 1rem; color: var(--green-800); font-weight: 500; margin-bottom: 6px; }
+  .dropzone p { font-size: 0.84rem; color: var(--gray-400); }
+  .dropzone .file-types { font-size: 0.75rem; color: var(--gray-200); margin-top: 6px; }
+  #file-input { display: none; }
+
+  /* Preview */
+  .preview-container {
+    position: relative;
+    margin-top: 1rem;
+    border-radius: 12px;
+    overflow: hidden;
+    display: none;
+  }
+  .preview-container.visible { display: block; }
+  #preview-img {
+    width: 100%;
+    max-height: 320px;
+    object-fit: contain;
+    background: #f0f4e8;
+    border-radius: 12px;
+  }
+  .preview-analyze-btn {
+    margin-top: 1rem;
+    width: 100%;
+    padding: 12px;
+    background: var(--green-600);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+  }
+  .preview-analyze-btn:hover { background: var(--green-800); }
+  .preview-analyze-btn:active { transform: scale(0.98); }
+  .preview-analyze-btn:disabled { background: var(--gray-200); cursor: not-allowed; }
+
+  /* Results */
+  .results-section {
+    display: none;
+  }
+  .results-section.visible { display: block; }
+
+  .result-card {
+    border-radius: 20px;
+    overflow: hidden;
+    border: 1px solid rgba(99,153,34,0.18);
+    box-shadow: 0 4px 24px rgba(59,109,17,0.08);
+  }
+  .result-header {
+    padding: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .result-header.organic { background: linear-gradient(135deg, #EAF3DE 0%, #d4ebbb 100%); }
+  .result-header.recyclable { background: linear-gradient(135deg, #E1F5EE 0%, #c0ecdc 100%); }
+  .result-header.unknown { background: linear-gradient(135deg, var(--gray-50) 0%, #e8e6de 100%); }
+
+  .result-icon {
+    width: 64px; height: 64px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .result-icon.organic { background: var(--green-600); }
+  .result-icon.recyclable { background: var(--teal-600); }
+  .result-icon.unknown { background: var(--gray-400); }
+  .result-icon svg { width: 32px; height: 32px; fill: white; }
+
+  .result-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.7rem;
+    color: var(--green-800);
+  }
+  .result-subtitle {
+    font-size: 0.88rem;
+    color: var(--gray-600);
+    margin-top: 3px;
+  }
+  .result-confidence {
+    margin-left: auto;
+    text-align: right;
+  }
+  .confidence-pct {
+    font-family: 'DM Serif Display', serif;
+    font-size: 2rem;
+    color: var(--green-600);
+  }
+  .confidence-label {
+    font-size: 0.72rem;
+    color: var(--gray-400);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .result-body { background: white; padding: 1.5rem; }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 1.5rem;
+  }
+  @media (max-width: 500px) { .stats-grid { grid-template-columns: 1fr; } }
+  .stat-card {
+    background: var(--gray-50);
+    border-radius: 12px;
+    padding: 1rem;
+    text-align: center;
+  }
+  .stat-value {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.5rem;
+    color: var(--green-800);
+    margin-bottom: 4px;
+  }
+  .stat-label {
+    font-size: 0.75rem;
+    color: var(--gray-400);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .co2-bar-section { margin-bottom: 1.5rem; }
+  .co2-bar-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .co2-bar-label span:first-child { font-size: 0.85rem; color: var(--gray-600); font-weight: 500; }
+  .co2-bar-label span:last-child { font-size: 0.85rem; color: var(--green-600); font-weight: 500; }
+  .co2-track {
+    height: 10px;
+    background: var(--green-50);
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(99,153,34,0.12);
+  }
+  .co2-fill {
+    height: 100%;
+    border-radius: 10px;
+    transition: width 0.8s cubic-bezier(0.22,1,0.36,1);
+    width: 0%;
+  }
+  .co2-fill.organic { background: var(--green-400); }
+  .co2-fill.recyclable { background: var(--teal-400); }
+
+  .tip-box {
+    background: var(--green-50);
+    border-left: 3px solid var(--green-400);
+    border-radius: 0 10px 10px 0;
+    padding: 12px 16px;
+    margin-bottom: 1.5rem;
+  }
+  .tip-box .tip-title { font-size: 0.78rem; font-weight: 500; color: var(--green-600); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+  .tip-box p { font-size: 0.88rem; color: var(--gray-600); line-height: 1.6; }
+
+  .all-predictions {
+    border-top: 1px solid var(--gray-50);
+    padding-top: 1rem;
+  }
+  .all-predictions h4 { font-size: 0.78rem; color: var(--gray-400); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; font-weight: 500; }
+  .pred-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .pred-name { font-size: 0.85rem; color: var(--gray-600); min-width: 100px; }
+  .pred-track {
+    flex: 1;
+    height: 6px;
+    background: var(--gray-50);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .pred-fill {
+    height: 100%;
+    border-radius: 6px;
+    background: var(--green-200);
+    transition: width 0.8s cubic-bezier(0.22,1,0.36,1);
+  }
+  .pred-pct { font-size: 0.82rem; color: var(--gray-400); min-width: 38px; text-align: right; }
+
+  .scan-again-btn {
+    width: 100%;
+    margin-top: 1.5rem;
+    padding: 12px;
+    background: transparent;
+    color: var(--green-600);
+    border: 1px solid rgba(99,153,34,0.35);
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .scan-again-btn:hover { background: var(--green-50); }
+
+  /* Loading state */
+  .analyzing-overlay {
+    display: none;
+    text-align: center;
+    padding: 2.5rem 1.5rem;
+  }
+  .analyzing-overlay.visible { display: block; }
+  .spinner {
+    width: 48px; height: 48px;
+    border: 3px solid var(--green-50);
+    border-top-color: var(--green-600);
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+    margin: 0 auto 1rem;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .analyzing-overlay p { color: var(--gray-600); font-size: 0.95rem; }
+  .analyzing-overlay small { color: var(--gray-200); font-size: 0.8rem; margin-top: 6px; display: block; }
+
+  footer {
+    text-align: center;
+    padding: 2rem;
+    color: var(--gray-200);
+    font-size: 0.78rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  .error-msg {
+    background: #FCEBEB;
+    color: var(--red-400);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    margin-top: 10px;
+    display: none;
+  }
+  .error-msg.visible { display: block; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 19.82A1 1 0 005.3 21C8 17 11 14 17 14v4l5-5-5-5v4z"/></svg>
+    </div>
+    <div>
+      <div class="logo-text">EcoScan</div>
+      <div class="logo-sub">Waste Classifier</div>
+    </div>
+  </div>
+  <span class="header-badge" id="model-status-badge">Model not loaded</span>
+</header>
+
+<main>
+  <div class="hero">
+    <h1>Scan. Classify. Act.</h1>
+    <p>Point your camera or upload an image to instantly classify waste and understand its environmental impact.</p>
+  </div>
+
+  <!-- Model URL Setup -->
+  <div class="model-setup">
+    <label>Teachable Machine URL</label>
+    <input type="text" id="model-url" value="https://teachablemachine.withgoogle.com/models/XSkzvidUP/" />
+    <button class="btn-load" onclick="loadModel()">Load Model</button>
+    <span class="model-status idle" id="model-status-inline">Not loaded</span>
+  </div>
+  <div class="error-msg" id="model-error"></div>
+
+  <!-- Scanner Card -->
+  <div class="scanner-card">
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('camera', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M20.94 11A8.994 8.994 0 0012 3a8.994 8.994 0 00-8.94 8m0 2A8.994 8.994 0 0012 21a8.994 8.994 0 008.94-8"/></svg>
+        Live Camera
+      </button>
+      <button class="tab" onclick="switchTab('upload', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Upload Image
+      </button>
+    </div>
+
+    <!-- Camera Tab -->
+    <div class="tab-content active camera-panel" id="tab-camera">
+      <div id="camera-view-container">
+        <video id="camera-video" autoplay playsinline></video>
+        <canvas id="camera-canvas"></canvas>
+        <div class="camera-placeholder" id="cam-placeholder">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          <p>Camera is off</p>
+        </div>
+        <div class="scan-overlay" id="scan-overlay">
+          <div class="scan-line"></div>
+          <div class="scan-corner tl"></div>
+          <div class="scan-corner tr"></div>
+          <div class="scan-corner bl"></div>
+          <div class="scan-corner br"></div>
+        </div>
+      </div>
+      <div class="camera-controls">
+        <button class="btn-primary" id="btn-start-cam" onclick="startCamera()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M12 2a10 10 0 100 20A10 10 0 0012 2zm0 18a8 8 0 110-16 8 8 0 010 16zm-1-11v6l5-3-5-3z"/></svg>
+          Start Camera
+        </button>
+        <button class="btn-primary" id="btn-capture" onclick="captureAndAnalyze()" style="display:none;" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><circle cx="12" cy="12" r="3"/><path d="M20.94 11A8.994 8.994 0 0012 3a8.994 8.994 0 00-8.94 8m0 2A8.994 8.994 0 0012 21a8.994 8.994 0 008.94-8"/></svg>
+          Capture & Analyze
+        </button>
+        <button class="btn-secondary" id="btn-stop-cam" onclick="stopCamera()" style="display:none;">Stop Camera</button>
+      </div>
+    </div>
+
+    <!-- Upload Tab -->
+    <div class="tab-content upload-panel" id="tab-upload">
+      <div class="dropzone" id="dropzone" onclick="document.getElementById('file-input').click()" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <h3>Drop your image here</h3>
+        <p>or click to browse files</p>
+        <div class="file-types">JPG, PNG, WEBP, GIF up to 10MB</div>
+      </div>
+      <input type="file" id="file-input" accept="image/*" onchange="handleFileSelect(event)" />
+      <div class="preview-container" id="preview-container">
+        <img id="preview-img" src="" alt="Preview" />
+        <button class="preview-analyze-btn" id="btn-analyze-upload" onclick="analyzeUploadedImage()" disabled>Analyze Image</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Analyzing Overlay -->
+  <div class="analyzing-overlay" id="analyzing-overlay">
+    <div class="spinner"></div>
+    <p>Analyzing your waste item...</p>
+    <small>Running through AI classification model</small>
+  </div>
+
+  <!-- Results Section -->
+  <div class="results-section" id="results-section">
+    <div class="result-card">
+      <div class="result-header" id="result-header">
+        <div class="result-icon" id="result-icon">
+          <svg id="result-svg" viewBox="0 0 24 24"></svg>
+        </div>
+        <div>
+          <div class="result-title" id="result-title">Organic Waste</div>
+          <div class="result-subtitle" id="result-subtitle">Food or plant-based material</div>
+        </div>
+        <div class="result-confidence">
+          <div class="confidence-pct" id="confidence-pct">94%</div>
+          <div class="confidence-label">Confidence</div>
+        </div>
+      </div>
+      <div class="result-body">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-value" id="stat-co2">0.6 kg</div>
+            <div class="stat-label">CO₂ if landfilled</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="stat-saved">0.4 kg</div>
+            <div class="stat-label">CO₂ if composted</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="stat-saving">0.2 kg</div>
+            <div class="stat-label">CO₂ saving</div>
+          </div>
+        </div>
+
+        <div class="co2-bar-section">
+          <div class="co2-bar-label">
+            <span>Landfill CO₂ vs Responsible Disposal</span>
+            <span id="co2-pct-label">33% less</span>
+          </div>
+          <div class="co2-track">
+            <div class="co2-fill" id="co2-fill"></div>
+          </div>
+        </div>
+
+        <div class="tip-box">
+          <div class="tip-title">Disposal Tip</div>
+          <p id="tip-text">Place this in your compost bin or organic waste collection. Composting reduces methane emissions significantly compared to landfill.</p>
+        </div>
+
+        <div class="all-predictions">
+          <h4>All Classifications</h4>
+          <div id="all-preds-container"></div>
+        </div>
+
+        <button class="scan-again-btn" onclick="resetScan()">Scan another item</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  EcoScan &mdash; Built for Information Systems coursework &nbsp;|&nbsp; Powered by Google Teachable Machine
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8.5/dist/teachablemachine-image.min.js"></script>
+
+<script>
+let model = null;
+let webcamObj = null;
+let stream = null;
+let uploadedImageEl = null;
+let isModelLoaded = false;
+
+window.addEventListener('load', () => { loadModel(); });
+
+// CO2 data per category (kg CO2 per item if landfilled / if properly disposed)
+const CO2_DATA = {
+  organic: { landfill: 0.6, proper: 0.15, unit: 'kg', saving: 0.45, tip: 'Compost this item — composting diverts methane-producing organic matter from landfills and enriches soil naturally.' },
+  recyclable: { landfill: 1.2, proper: 0.3, unit: 'kg', saving: 0.9, tip: 'Place in your recycling bin, rinsed and dry. Recycling saves up to 75% of the energy needed to produce new materials.' },
+  default: { landfill: 0.5, proper: 0.2, unit: 'kg', saving: 0.3, tip: 'When in doubt, check your local waste guidelines. Proper sorting makes a big difference at the sorting facility.' }
+};
+
+const ICONS = {
+  organic: '<path d="M17 8C8 10 5.9 16.17 3.82 19.82A1 1 0 005.3 21C8 17 11 14 17 14v4l5-5-5-5v4z"/>',
+  recyclable: '<path d="M7 19H4.815a1.83 1.83 0 01-1.57-.881 1.785 1.785 0 01-.004-1.784L7.196 9.5M7 19h9M7 19l3-7m9 0h2.188a1.83 1.83 0 011.57.881 1.786 1.786 0 010 1.784L16.804 19.5M16 12l-3 7m0 0l-3-7m3 7V5m0 0a2 2 0 100-4 2 2 0 000 4z"/>',
+  unknown: '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>'
+};
+
+function setModelStatus(status, text) {
+  const badge = document.getElementById('model-status-badge');
+  const inline = document.getElementById('model-status-inline');
+  badge.textContent = text;
+  inline.textContent = text;
+  inline.className = 'model-status ' + status;
+}
+
+async function loadModel() {
+  const urlInput = document.getElementById('model-url').value.trim();
+  if (!urlInput) { showModelError('Please enter your Teachable Machine model URL.'); return; }
+  const url = urlInput.endsWith('/') ? urlInput : urlInput + '/';
+  setModelStatus('loading', 'Loading model...');
+  hideModelError();
+  try {
+    const modelURL = url + 'model.json';
+    const metadataURL = url + 'metadata.json';
+    model = await tmImage.load(modelURL, metadataURL);
+    isModelLoaded = true;
+    setModelStatus('ready', 'Model ready');
+    document.getElementById('btn-capture').disabled = false;
+    document.getElementById('btn-analyze-upload').disabled = uploadedImageEl === null;
+  } catch(e) {
+    setModelStatus('error', 'Failed to load');
+    showModelError('Could not load model. Check the URL and ensure CORS is enabled. Error: ' + e.message);
+  }
+}
+
+function showModelError(msg) {
+  const el = document.getElementById('model-error');
+  el.textContent = msg;
+  el.classList.add('visible');
+}
+function hideModelError() {
+  document.getElementById('model-error').classList.remove('visible');
+}
+
+function switchTab(tab, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-' + tab).classList.add('active');
+}
+
+async function startCamera() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    const video = document.getElementById('camera-video');
+    video.srcObject = stream;
+    video.style.display = 'block';
+    document.getElementById('cam-placeholder').style.display = 'none';
+    document.getElementById('scan-overlay').classList.add('active');
+    document.getElementById('btn-start-cam').style.display = 'none';
+    document.getElementById('btn-capture').style.display = 'flex';
+    document.getElementById('btn-stop-cam').style.display = 'inline-block';
+  } catch(e) {
+    showModelError('Camera access denied or unavailable: ' + e.message);
+  }
+}
+
+function stopCamera() {
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  const video = document.getElementById('camera-video');
+  video.style.display = 'none';
+  document.getElementById('cam-placeholder').style.display = 'flex';
+  document.getElementById('scan-overlay').classList.remove('active');
+  document.getElementById('btn-start-cam').style.display = 'flex';
+  document.getElementById('btn-capture').style.display = 'none';
+  document.getElementById('btn-stop-cam').style.display = 'none';
+}
+
+async function captureAndAnalyze() {
+  if (!isModelLoaded) { showModelError('Please load your model first.'); return; }
+  const video = document.getElementById('camera-video');
+  const canvas = document.getElementById('camera-canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  showAnalyzing();
+  await runPrediction(canvas);
+}
+
+function handleFileSelect(e) {
+  const file = e.target.files[0];
+  if (file) loadImagePreview(file);
+}
+function handleDragOver(e) { e.preventDefault(); document.getElementById('dropzone').classList.add('dragover'); }
+function handleDragLeave(e) { document.getElementById('dropzone').classList.remove('dragover'); }
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('dropzone').classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) loadImagePreview(file);
+}
+
+function loadImagePreview(file) {
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const img = document.getElementById('preview-img');
+    img.src = ev.target.result;
+    img.onload = () => { uploadedImageEl = img; };
+    document.getElementById('preview-container').classList.add('visible');
+    document.getElementById('btn-analyze-upload').disabled = !isModelLoaded;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function analyzeUploadedImage() {
+  if (!isModelLoaded) { showModelError('Please load your model first.'); return; }
+  if (!uploadedImageEl) return;
+  showAnalyzing();
+  await runPrediction(uploadedImageEl);
+}
+
+async function runPrediction(imageSource) {
+  try {
+    const predictions = await model.predict(imageSource);
+    showAnalyzing(false);
+    displayResults(predictions);
+  } catch(e) {
+    showAnalyzing(false);
+    showModelError('Prediction failed: ' + e.message);
+  }
+}
+
+function showAnalyzing(show = true) {
+  document.getElementById('analyzing-overlay').classList.toggle('visible', show);
+  document.getElementById('results-section').classList.toggle('visible', !show && false);
+  if (show) document.getElementById('results-section').classList.remove('visible');
+}
+
+function displayResults(predictions) {
+  const top = predictions.reduce((a, b) => a.probability > b.probability ? a : b);
+  const topName = top.className.toLowerCase();
+  const confidence = Math.round(top.probability * 100);
+
+  let type = 'unknown';
+  if (topName.includes('organic') || topName.includes('food') || topName.includes('compost') || topName.includes('biodegrad')) type = 'organic';
+  else if (topName.includes('recycl') || topName.includes('plastic') || topName.includes('metal') || topName.includes('glass') || topName.includes('paper') || topName.includes('cardboard') || topName.includes('tin') || topName.includes('can') || topName.includes('bottle')) type = 'recyclable';
+
+  const co2 = CO2_DATA[type] || CO2_DATA.default;
+  const savingPct = Math.round((co2.saving / co2.landfill) * 100);
+
+  // Header
+  document.getElementById('result-header').className = 'result-header ' + type;
+  document.getElementById('result-icon').className = 'result-icon ' + type;
+  document.getElementById('result-svg').innerHTML = ICONS[type] || ICONS.unknown;
+  document.getElementById('result-svg').setAttribute('fill', type === 'unknown' ? 'none' : 'white');
+  if (type === 'unknown') { document.getElementById('result-svg').setAttribute('stroke', 'white'); document.getElementById('result-svg').setAttribute('stroke-width', '2'); }
+  document.getElementById('result-title').textContent = top.className;
+  document.getElementById('result-subtitle').textContent =
+    type === 'organic' ? 'Biodegradable — compost or organic bin' :
+    type === 'recyclable' ? 'Recyclable — clean and sort before disposal' :
+    'Check local waste guidelines';
+  document.getElementById('confidence-pct').textContent = confidence + '%';
+
+  // Stats
+  document.getElementById('stat-co2').textContent = co2.landfill + ' kg';
+  document.getElementById('stat-saved').textContent = co2.proper + ' kg';
+  document.getElementById('stat-saving').textContent = co2.saving + ' kg';
+
+  // CO2 bar
+  document.getElementById('co2-pct-label').textContent = savingPct + '% less';
+  const fill = document.getElementById('co2-fill');
+  fill.className = 'co2-fill ' + type;
+  setTimeout(() => { fill.style.width = savingPct + '%'; }, 100);
+
+  // Tip
+  document.getElementById('tip-text').textContent = co2.tip;
+
+  // All predictions
+  const container = document.getElementById('all-preds-container');
+  container.innerHTML = predictions
+    .sort((a, b) => b.probability - a.probability)
+    .map(p => `
+      <div class="pred-row">
+        <span class="pred-name">${p.className}</span>
+        <div class="pred-track"><div class="pred-fill" style="width:${Math.round(p.probability*100)}%"></div></div>
+        <span class="pred-pct">${Math.round(p.probability*100)}%</span>
+      </div>`).join('');
+
+  document.getElementById('results-section').classList.add('visible');
+  document.getElementById('results-section').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function resetScan() {
+  document.getElementById('results-section').classList.remove('visible');
+  document.getElementById('preview-container').classList.remove('visible');
+  uploadedImageEl = null;
+  document.getElementById('file-input').value = '';
+  document.getElementById('co2-fill').style.width = '0%';
+}
+</script>
+</body>
+</html>
